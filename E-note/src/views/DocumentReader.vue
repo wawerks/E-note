@@ -47,9 +47,9 @@ onMounted(() => {
 
 <template>
   <main class="reader-page">
-    <header class="reader-header">
+    <header class="reader-header soft-card">
       <div>
-        <p class="brand-mark">E-note</p>
+        <p class="eyebrow">Document Reader</p>
         <h1>{{ documentRecord?.title || 'Document Reader' }}</h1>
         <p>Signed in as {{ displayName }}</p>
       </div>
@@ -61,14 +61,14 @@ onMounted(() => {
     </header>
 
     <section class="workspace">
-      <aside class="tool-rail">
+      <aside class="tool-rail soft-card">
         <button class="tool-button" :class="{ active: activeTool === 'notes' }" type="button" @click="activeTool = 'notes'">Notes</button>
         <button class="tool-button" :class="{ active: activeTool === 'highlights' }" type="button" @click="activeTool = 'highlights'">Highlights</button>
         <button class="tool-button" :class="{ active: activeTool === 'summary' }" type="button" @click="activeTool = 'summary'">Summary</button>
         <button class="tool-button" :class="{ active: activeTool === 'search' }" type="button" @click="activeTool = 'search'">Search</button>
       </aside>
 
-      <section class="reader-content">
+      <section class="reader-content soft-card">
         <div class="reader-toolbar">
           <div>
             <p class="reader-label">Document workspace</p>
@@ -123,8 +123,8 @@ onMounted(() => {
 .reader-page {
   min-height: 100vh;
   padding: 28px;
-  background: #f4f7fb;
-  color: #0f172a;
+  background: #f8f9fa;
+  color: #344767;
 }
 
 .reader-header {
@@ -134,14 +134,19 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 20px;
   padding: 24px;
-  border-radius: 24px;
-  background: white;
-  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.brand-mark {
+.soft-card {
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.02),
+    0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.eyebrow {
   margin: 0;
-  color: #2563eb;
+  color: #67748e;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   font-size: 0.78rem;
@@ -149,11 +154,12 @@ onMounted(() => {
 
 .reader-header h1 {
   margin: 8px 0 0;
+  color: #344767;
 }
 
 .reader-header p {
   margin: 8px 0 0;
-  color: #475569;
+  color: #67748e;
 }
 
 .reader-actions {
@@ -168,8 +174,8 @@ onMounted(() => {
   border: 0;
   text-decoration: none;
   cursor: pointer;
-  background: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
+  background: #f8f9fa;
+  color: #344767;
 }
 
 .workspace {
@@ -184,21 +190,19 @@ onMounted(() => {
   align-content: start;
   gap: 10px;
   padding: 16px;
-  border-radius: 24px;
-  background: white;
-  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .tool-button {
   padding: 12px 10px;
   border: 0;
   border-radius: 14px;
-  background: rgba(15, 23, 42, 0.08);
+  background: #f8f9fa;
+  color: #67748e;
   cursor: pointer;
 }
 
 .tool-button.active {
-  background: #2563eb;
+  background: #5e72e4;
   color: white;
 }
 
@@ -206,9 +210,6 @@ onMounted(() => {
   display: grid;
   gap: 16px;
   padding: 24px;
-  border-radius: 24px;
-  background: white;
-  border: 1px solid rgba(148, 163, 184, 0.2);
   overflow: hidden;
 }
 
@@ -221,7 +222,7 @@ onMounted(() => {
 
 .reader-label {
   margin: 0;
-  color: #2563eb;
+  color: #67748e;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   font-size: 0.75rem;
@@ -242,8 +243,8 @@ onMounted(() => {
 .tool-panel {
   min-height: 0;
   border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: #f8fafc;
+  border: 1px solid #e9ecef;
+  background: #f8f9fa;
 }
 
 .document-frame {
@@ -265,10 +266,11 @@ onMounted(() => {
 .tool-panel textarea,
 .tool-panel input {
   width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid #e9ecef;
   border-radius: 14px;
   padding: 12px;
   background: white;
+  color: #344767;
 }
 
 .state-panel {
@@ -278,7 +280,7 @@ onMounted(() => {
 }
 
 .error-text {
-  color: #b91c1c;
+  color: #ea0606;
 }
 
 @media (max-width: 900px) {

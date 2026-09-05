@@ -50,10 +50,12 @@ async function handleUpload() {
 
 <template>
   <main class="upload-page">
-    <section class="upload-card">
-      <p class="eyebrow">E-note</p>
-      <h1>Upload Document</h1>
-      <p class="helper">Accepted through Supabase Storage. Max size: 25 MB.</p>
+    <section class="upload-card soft-card">
+      <div class="text-center">
+        <p class="eyebrow">Upload</p>
+        <h1>Upload Document</h1>
+        <p class="helper">Accepted through Supabase Storage. Max size: 25 MB.</p>
+      </div>
 
       <form class="upload-form" @submit.prevent="handleUpload">
         <label>
@@ -61,8 +63,8 @@ async function handleUpload() {
           <input v-model="title" type="text" required placeholder="Study notes, lecture slides, and more">
         </label>
 
-        <label>
-          <span>Select File</span>
+        <label class="drop-zone">
+          <span>Drop file here or choose a file</span>
           <input type="file" required @change="handleFileChange">
         </label>
 
@@ -73,7 +75,7 @@ async function handleUpload() {
           <button class="primary-button" type="submit" :disabled="loading">
             {{ loading ? 'Uploading...' : 'Upload Document' }}
           </button>
-          <RouterLink to="/dashboard" class="secondary-button">Cancel</RouterLink>
+          <RouterLink to="/documents" class="secondary-button">Cancel</RouterLink>
         </div>
       </form>
     </section>
@@ -86,38 +88,48 @@ async function handleUpload() {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  background: #f8f9fa;
 }
 
 .upload-card {
-  width: min(100%, 560px);
+  width: min(100%, 640px);
   padding: 32px;
-  border-radius: 28px;
-  background: white;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.08);
+}
+
+.soft-card {
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.02),
+    0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 .eyebrow {
   margin: 0;
-  color: #2563eb;
-  letter-spacing: 0.18em;
+  color: #67748e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  font-size: 0.78rem;
+}
+
+h1 {
+  margin: 10px 0 0;
+  color: #344767;
 }
 
 .helper,
 .error-message,
 .success-message {
-  color: #475569;
+  color: #67748e;
 }
 
 .error-message {
-  color: #b91c1c;
+  color: #ea0606;
 }
 
 .success-message {
-  color: #15803d;
+  color: #82d616;
 }
 
 .upload-form {
@@ -129,14 +141,36 @@ async function handleUpload() {
 label {
   display: grid;
   gap: 8px;
+  color: #344767;
+  font-weight: 600;
 }
 
 input {
   width: 100%;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  background: #f8fafc;
+  border: 1px solid #e9ecef;
+  background: #f8f9fa;
+  color: #344767;
+}
+
+input:focus {
+  outline: none;
+  border-color: #5e72e4;
+  box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.12);
+}
+
+.drop-zone {
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px dashed #d7dce3;
+  background: #f8f9fa;
+}
+
+.drop-zone input {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .actions {
@@ -155,18 +189,22 @@ input {
 }
 
 .primary-button {
-  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  background: #5e72e4;
   color: white;
   font-weight: 600;
 }
 
 .secondary-button {
-  background: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
+  background: #f8f9fa;
+  color: #344767;
 }
 
 .primary-button:disabled {
   opacity: 0.72;
   cursor: wait;
+}
+
+.text-center {
+  text-align: center;
 }
 </style>

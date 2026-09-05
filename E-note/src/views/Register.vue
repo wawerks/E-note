@@ -84,31 +84,11 @@ async function handleRegister() {
 
 <template>
   <main class="auth-page">
-    <section class="hero-panel">
-      <p class="brand-mark">E-note</p>
-      <h1>Build a private document workspace for school or work.</h1>
-      <p>
-        Create your account to upload files, organize your notes, and keep your
-        library connected to Supabase Auth.
-      </p>
-
-      <div class="hero-points">
-        <div>
-          <strong>Personalized library</strong>
-          <span>Your uploads are stored per account.</span>
-        </div>
-        <div>
-          <strong>Fast onboarding</strong>
-          <span>Register once and pick up on any device.</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="auth-panel">
-      <div class="brand">
-        <p class="eyebrow">Get started</p>
-        <h2>Create your account</h2>
-        <p>Store your study documents in one secure workspace.</p>
+    <section class="auth-card">
+      <div class="brand-badge">E-NOTE</div>
+      <div class="brand-copy">
+        <h1>Create your account</h1>
+        <p>Start organizing your study documents.</p>
       </div>
 
       <form class="auth-form" @submit.prevent="handleRegister">
@@ -126,7 +106,7 @@ async function handleRegister() {
           <span>Password</span>
           <div class="password-field">
             <input v-model="password" :type="passwordFieldType" autocomplete="new-password" required placeholder="At least 8 characters">
-            <button type="button" class="ghost-button" @click="showPassword = !showPassword">
+            <button type="button" class="toggle-button" @click="showPassword = !showPassword">
               {{ showPassword ? 'Hide' : 'Show' }}
             </button>
           </div>
@@ -141,7 +121,7 @@ async function handleRegister() {
         <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
 
         <button class="primary-button" type="submit" :disabled="loading">
-          {{ loading ? 'Creating account...' : 'Register' }}
+          {{ loading ? 'Creating account...' : 'Create account' }}
         </button>
       </form>
 
@@ -157,95 +137,44 @@ async function handleRegister() {
 .auth-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(420px, 0.8fr);
-  background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.16), transparent 24%),
-    linear-gradient(180deg, #08111f 0%, #111827 100%);
+  place-items: center;
+  padding: 24px;
+  background: #f8f9fa;
 }
 
-.hero-panel {
-  display: flex;
-  flex-direction: column;
+.auth-card {
+  width: min(100%, 480px);
+  padding: 32px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e9ecef;
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.02),
+    0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  gap: 20px;
-  padding: clamp(32px, 6vw, 88px);
-  color: #f8fafc;
-}
-
-.hero-panel h1 {
-  margin: 0;
-  max-width: 13ch;
-  font-size: clamp(2.6rem, 5vw, 5rem);
-  line-height: 0.95;
-}
-
-.hero-panel > p {
-  max-width: 56ch;
-  margin: 0;
-  color: rgba(226, 232, 240, 0.82);
-  font-size: 1.05rem;
-}
-
-.hero-points {
-  display: grid;
-  gap: 14px;
-  margin-top: 18px;
-}
-
-.hero-points div {
-  max-width: 420px;
-  padding: 18px 20px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 20px;
-  background: rgba(15, 23, 42, 0.38);
-  backdrop-filter: blur(12px);
-}
-
-.hero-points strong {
-  display: block;
-  margin-bottom: 6px;
-}
-
-.hero-points span {
-  color: rgba(226, 232, 240, 0.76);
-}
-
-.auth-panel {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: clamp(28px, 5vw, 72px);
-  background: rgba(15, 23, 42, 0.84);
-  border-left: 1px solid rgba(148, 163, 184, 0.14);
-  color: #e2e8f0;
-  backdrop-filter: blur(18px);
-}
-
-.brand-mark {
-  margin: 0;
-  color: #7dd3fc;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-size: 0.8rem;
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  color: #7dd3fc;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #f8f9fa;
+  color: #5e72e4;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-size: 0.78rem;
 }
 
-.brand h2 {
-  margin: 0;
-  font-size: clamp(2rem, 3.6vw, 3.2rem);
+.brand-copy h1 {
+  margin: 18px 0 0;
+  color: #344767;
+  font-size: 2rem;
 }
 
-.brand p {
-  margin: 12px 0 0;
-  color: rgba(226, 232, 240, 0.82);
+.brand-copy p {
+  margin: 8px 0 0;
+  color: #67748e;
 }
 
 .auth-form {
@@ -258,20 +187,22 @@ label {
   display: grid;
   gap: 8px;
   font-size: 0.95rem;
+  color: #344767;
 }
 
 input {
   width: 100%;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.7);
-  color: inherit;
+  border: 1px solid #e9ecef;
+  background: #f8f9fa;
+  color: #344767;
 }
 
 input:focus {
-  outline: 2px solid rgba(56, 189, 248, 0.45);
-  border-color: transparent;
+  outline: none;
+  border-color: #5e72e4;
+  box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.12);
 }
 
 .password-field {
@@ -280,7 +211,7 @@ input:focus {
   gap: 10px;
 }
 
-.ghost-button,
+.toggle-button,
 .primary-button {
   border: 0;
   border-radius: 16px;
@@ -288,20 +219,21 @@ input:focus {
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
-.ghost-button {
+.toggle-button {
   padding: 0 14px;
-  background: rgba(148, 163, 184, 0.14);
-  color: #e2e8f0;
+  background: #ffffff;
+  color: #344767;
+  border: 1px solid #e9ecef;
 }
 
 .primary-button {
   padding: 14px 18px;
-  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  background: #5e72e4;
   color: white;
   font-weight: 600;
 }
 
-.ghost-button:hover,
+.toggle-button:hover,
 .primary-button:hover {
   transform: translateY(-1px);
 }
@@ -313,40 +245,27 @@ input:focus {
 
 .error-message {
   margin: -2px 0 0;
-  color: #fca5a5;
+  color: #ea0606;
 }
 
 .success-message {
   margin: -2px 0 0;
-  color: #86efac;
+  color: #82d616;
 }
 
 .auth-link {
   margin: 22px 0 0;
-  color: rgba(226, 232, 240, 0.82);
+  color: #67748e;
+  text-align: center;
 }
 
 .auth-link a {
-  color: #7dd3fc;
+  color: #5e72e4;
   text-decoration: none;
 }
 
 @media (max-width: 640px) {
-  .auth-page {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-panel {
-    min-height: 40vh;
-    padding-bottom: 24px;
-  }
-
-  .auth-panel {
-    border-left: 0;
-    border-top: 1px solid rgba(148, 163, 184, 0.14);
-  }
-
-  .auth-panel {
+  .auth-card {
     padding: 24px;
   }
 
