@@ -6,37 +6,78 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      component: () => import('../layouts/AuthLayout.vue'),
+      children: [
+        {
+          path: '',
+          redirect: '/login',
+        },
+        {
+          path: '/login',
+          name: 'login',
+          meta: { guestOnly: true },
+          component: () => import('../views/Login.vue'),
+        },
+        {
+          path: '/register',
+          name: 'register',
+          meta: { guestOnly: true },
+          component: () => import('../views/Register.vue'),
+        },
+        {
+          path: '/forgot-password',
+          name: 'forgot-password',
+          meta: { guestOnly: true },
+          component: () => import('../views/ForgotPassword.vue'),
+        },
+      ],
     },
     {
-      path: '/login',
-      name: 'login',
-      meta: { guestOnly: true },
-      component: () => import('../views/Login.vue'),
-    },
-    {
-      path: '/register',
-      name: 'register',
-      meta: { guestOnly: true },
-      component: () => import('../views/Register.vue'),
-    },
-    {
-      path: '/dashboard',
-      name: 'dashboard',
+      path: '/',
+      component: () => import('../layouts/AppLayout.vue'),
       meta: { requiresAuth: true },
-      component: () => import('../views/Dashboard.vue'),
-    },
-    {
-      path: '/upload',
-      name: 'upload',
-      meta: { requiresAuth: true },
-      component: () => import('../views/UploadDocument.vue'),
-    },
-    {
-      path: '/documents/:id',
-      name: 'document-reader',
-      meta: { requiresAuth: true },
-      component: () => import('../views/DocumentReader.vue'),
+      children: [
+        {
+          path: '/dashboard',
+          name: 'dashboard',
+          component: () => import('../views/Dashboard.vue'),
+        },
+        {
+          path: '/documents',
+          name: 'documents',
+          component: () => import('../views/DocumentsView.vue'),
+        },
+        {
+          path: '/upload',
+          name: 'upload',
+          component: () => import('../views/UploadDocument.vue'),
+        },
+        {
+          path: '/documents/:id',
+          name: 'document-reader',
+          component: () => import('../views/DocumentReader.vue'),
+        },
+        {
+          path: '/flashcards',
+          name: 'flashcards',
+          component: () => import('../views/FlashcardsView.vue'),
+        },
+        {
+          path: '/quizzes',
+          name: 'quizzes',
+          component: () => import('../views/QuizzesView.vue'),
+        },
+        {
+          path: '/progress',
+          name: 'progress',
+          component: () => import('../views/ProgressView.vue'),
+        },
+        {
+          path: '/settings',
+          name: 'settings',
+          component: () => import('../views/SettingsView.vue'),
+        },
+      ],
     },
   ],
 })
