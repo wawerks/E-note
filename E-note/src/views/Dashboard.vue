@@ -2,7 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, logout } from '../lib/auth'
-import { formatFileSize, getUserDisplayName, listUserDocuments, type DocumentRecord } from '../services/documents'
+import {
+  formatFileSize,
+  getUserDisplayName,
+  getDocumentSignedUrl,
+  listUserDocuments,
+  type DocumentRecord,
+} from '../services/documents'
 
 const router = useRouter()
 const documents = ref<DocumentRecord[]>([])
@@ -27,6 +33,11 @@ async function loadDocuments() {
 async function handleLogout() {
   await logout()
   await router.push('/login')
+}
+
+async function openDocument(document: DocumentRecord) {
+  void getDocumentSignedUrl(document)
+  await router.push({ name: 'document-reader', params: { id: document.id } })
 }
 
 onMounted(() => {
@@ -104,6 +115,9 @@ const recentDocuments = computed(() => documents.value.slice(0, 5))
               <span>{{ document.file_type || 'Unknown type' }}</span>
               <span>{{ formatFileSize(document.file_size) }}</span>
               <span>{{ new Date(document.created_at).toLocaleDateString() }}</span>
+              <button type="button" class="open-button" @click="openDocument(document)">
+                Open
+              </button>
             </div>
           </article>
         </div>
@@ -296,6 +310,16 @@ const recentDocuments = computed(() => documents.value.slice(0, 5))
   gap: 6px;
   color: #475569;
   font-size: 0.92rem;
+}
+
+.open-button {
+  margin-top: 6px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
 }
 
 .state-text.error {

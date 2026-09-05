@@ -32,6 +32,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
       component: () => import('../views/UploadDocument.vue'),
     },
+    {
+      path: '/documents/:id',
+      name: 'document-reader',
+      meta: { requiresAuth: true },
+      component: () => import('../views/DocumentReader.vue'),
+    },
   ],
 })
 

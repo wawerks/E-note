@@ -112,6 +112,43 @@ export async function uploadDocument(file: File, title: string) {
   return documentRecord
 }
 
+export async function getDocumentById(documentId: string) {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+
+  const user = await getCurrentUser()
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('id', documentId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return data as DocumentRecord
+}
+
+export async function getDocumentSignedUrl(document: DocumentRecord) {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(document.file_path, 60 * 10)
+
+  if (error) {
+    throw error
+  }
+
+  return data.signedUrl
+}
+
 export function getUserDisplayName(user: User | null) {
   if (!user) {
     return 'User'
