@@ -1,0 +1,335 @@
+Update my Vue.js E-note application so that `App.vue` handles Supabase Authentication and controls access to the Login and Dashboard pages.
+
+### Project Context
+
+This is an E-note/document management application using:
+
+* Vue 3
+* Vite
+* Vue Router
+* Supabase
+* Supabase Auth
+* Supabase Database
+* Supabase Storage
+
+The application already has a document/upload page and an existing `documents` table in Supabase. Do not remove or break the existing document functionality.
+
+### Main Goal
+
+Modify `App.vue` so the application uses Supabase Auth to determine whether the user is logged in.
+
+The behavior should be:
+
+1. When the user is NOT authenticated:
+
+   * Show the Login page.
+   * Prevent access to protected pages such as Dashboard and Upload Document.
+   * If the user manually navigates to a protected route, redirect them to `/login`.
+
+2. When the user IS authenticated:
+
+   * Redirect them to `/dashboard`.
+   * Allow access to Dashboard and other authenticated pages.
+   * Display the authenticated user's email/name where appropriate.
+   * Provide a Logout button.
+   * When Logout is clicked, call `supabase.auth.signOut()` and redirect to `/login`.
+
+### Supabase Client
+
+Use the existing Supabase client configuration.
+
+If the project already has something similar to:
+
+```js
+import { supabase } from '@/lib/supabase'
+```
+
+reuse it instead of creating another Supabase client.
+
+Do NOT expose the Supabase `service_role` key in the frontend. Only use the public anon/publishable key.
+
+### Authentication State
+
+Use:
+
+```js
+supabase.auth.getSession()
+```
+
+when the application starts to determine the current session.
+
+Also listen for authentication changes using:
+
+```js
+supabase.auth.onAuthStateChange(...)
+```
+
+The application should react immediately when the user logs in or logs out.
+
+Handle these states:
+
+* Loading authentication state
+* Authenticated
+* Unauthenticated
+
+Do not briefly display the Dashboard before Supabase finishes checking the session.
+
+### Vue Router
+
+Create/use routes similar to:
+
+```text
+/login
+/register
+/dashboard
+/upload
+```
+
+Protected routes:
+
+```text
+/dashboard
+/upload
+```
+
+Public routes:
+
+```text
+/login
+/register
+```
+
+Use Vue Router navigation guards or an equivalent centralized authentication guard.
+
+If a logged-in user attempts to visit `/login` or `/register`, redirect them to `/dashboard`.
+
+If a logged-out user attempts to visit `/dashboard` or `/upload`, redirect them to `/login`.
+
+### Login Page
+
+Create a clean modern Login UI for the E-note application.
+
+Include:
+
+* E-note branding/logo text
+* Email input
+* Password input
+* Show/hide password button
+* Login button
+* Loading state while logging in
+* Error message when authentication fails
+* Link to Register
+* Responsive design
+
+Login must use:
+
+```js
+supabase.auth.signInWithPassword({
+  email,
+  password
+})
+```
+
+Do not create a fake/local authentication system.
+
+### Register Page
+
+Create a Register page using Supabase Auth.
+
+Fields:
+
+* Full Name
+* Email
+* Password
+* Confirm Password
+
+Validate:
+
+* Required fields
+* Valid email
+* Password confirmation must match
+* Reasonable password length
+
+Register using:
+
+```js
+supabase.auth.signUp({
+  email,
+  password,
+  options: {
+    data: {
+      full_name: fullName
+    }
+  }
+})
+```
+
+After successful registration:
+
+* If email confirmation is enabled, show a message telling the user to verify their email.
+* Otherwise redirect to `/dashboard`.
+
+Do not store passwords in the database manually.
+
+### Dashboard
+
+Create a modern E-note Dashboard.
+
+The Dashboard should show:
+
+* Welcome message using the authenticated user's name/email
+* Total documents
+* Recent documents
+* Upload Document button
+* Logout button
+* Navigation/sidebar
+
+The dashboard should retrieve only documents belonging to the currently authenticated user.
+
+Use:
+
+```js
+const { data: { user } } = await supabase.auth.getUser()
+```
+
+Then query the `documents` table using the authenticated user's ID.
+
+Assume the `documents` table has a `user_id` column that references the authenticated Supabase user.
+
+Example:
+
+```js
+const { data, error } = await supabase
+  .from('documents')
+  .select('*')
+  .eq('user_id', user.id)
+  .order('created_at', { ascending: false })
+```
+
+Do not retrieve another user's documents.
+
+### Upload Document Integration
+
+Keep the existing Upload Document page.
+
+When a user uploads a document:
+
+1. Get the currently authenticated user.
+2. Upload the file to Supabase Storage.
+3. Store the document metadata in the `documents` table.
+4. Set:
+
+```text
+user_id = authenticated user's ID
+```
+
+The document must belong to the logged-in user.
+
+Do not allow a user to manually specify another `user_id`.
+
+### Logout
+
+Implement:
+
+```js
+await supabase.auth.signOut()
+```
+
+After successful logout:
+
+```js
+router.push('/login')
+```
+
+Clear any user-specific state from the application.
+
+### App.vue Responsibility
+
+Keep `App.vue` clean.
+
+It should primarily:
+
+* Initialize/check Supabase session
+* Listen for auth state changes
+* Maintain authentication loading state
+* Render the router view
+* Prevent the application from rendering protected content before authentication is resolved
+
+Avoid putting the entire Dashboard or Login UI directly inside `App.vue`.
+
+Prefer separate components/pages such as:
+
+```text
+src/
+├── App.vue
+├── main.js
+├── lib/
+│   └── supabase.js
+├── router/
+│   └── index.js
+├── views/
+│   ├── Login.vue
+│   ├── Register.vue
+│   ├── Dashboard.vue
+│   └── UploadDocument.vue
+└── components/
+    └── ...
+```
+
+### Important Requirements
+
+* Do not replace Supabase Auth with localStorage authentication.
+* Do not store passwords yourself.
+* Do not use the Supabase service-role key in frontend code.
+* Do not break the existing Supabase document/storage functionality.
+* Use the existing Supabase client.
+* Make the UI responsive for desktop and mobile.
+* Use a clean, modern E-note/document-management aesthetic.
+* Add proper loading and error states.
+* Handle expired sessions gracefully.
+* Keep authentication logic reusable and maintainable.
+* Make sure refreshing the browser does not log the user out if a valid Supabase session exists.
+
+### Expected Result
+
+The final application flow should be:
+
+```text
+                    ┌───────────────┐
+                    │    App.vue    │
+                    │ Check Session │
+                    └───────┬───────┘
+                            │
+                 ┌──────────┴──────────┐
+                 │                     │
+            No Session             Session Exists
+                 │                     │
+                 ▼                     ▼
+              /login              /dashboard
+                 │                     │
+                 │ Login               │
+                 └──────────►──────────┘
+                                       │
+                              ┌────────┴────────┐
+                              │                 │
+                         Dashboard         Upload Document
+                              │                 │
+                              └────────┬────────┘
+                                       │
+                                    Logout
+                                       │
+                                       ▼
+                                    /login
+```
+
+Please provide the complete updated code for:
+
+1. `App.vue`
+2. `router/index.js`
+3. `Login.vue`
+4. `Register.vue`
+5. `Dashboard.vue`
+
+Also explain exactly where each file should be placed and what, if anything, needs to be changed in the existing Supabase client configuration.
+
+Before changing existing database/storage code, inspect the current project structure and reuse existing components/functions wherever possible.

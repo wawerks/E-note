@@ -1,0 +1,640 @@
+# E-Note — Phase 1: Document Upload & Reading
+
+Build **Phase 1** of a modern web-based E-Note / Study application.
+
+The goal of this phase is intentionally simple:
+
+> A user should be able to upload a document they want to study, see their uploaded documents, and open a document to read it.
+
+Do NOT implement AI, quizzes, flashcards, highlighting, notes, analytics, or other study features yet. Those will be added in later phases.
+
+---
+
+## Technology Stack
+
+Use:
+
+* **Vue 3**
+* **Vite**
+* **TypeScript**
+* **Tailwind CSS**
+* **Pinia**
+* **Vue Router**
+* **Supabase**
+
+  * Supabase Auth
+  * Supabase PostgreSQL
+  * Supabase Storage
+  * Row Level Security (RLS)
+* **Lucide Vue** for icons
+
+The application should be structured so future features can easily be added.
+
+---
+
+# 1. Phase 1 Features
+
+Implement only these features:
+
+### Authentication
+
+* User registration
+* User login
+* User logout
+* Persistent authentication session
+* Protected application routes
+
+### Document Management
+
+Authenticated users can:
+
+* Upload a document
+* View their uploaded documents
+* Open a document
+* Delete a document
+* Search their uploaded documents
+
+### Document Reader
+
+When a user opens a document:
+
+* Display the document inside the application
+* Allow the user to read it
+* Provide basic page navigation if the format supports it
+* Provide zoom controls where appropriate
+* Provide a download button
+* Provide a fullscreen option where appropriate
+
+---
+
+# 2. Supported Documents
+
+For Phase 1, prioritize:
+
+### PDF
+
+PDF should be the primary supported format because the application is intended for studying.
+
+Also prepare the architecture so additional formats can be supported later:
+
+* DOCX
+* PPTX
+* TXT
+* EPUB
+
+Do not implement complicated document conversion yet.
+
+For non-PDF files, display an appropriate message or download/open option rather than pretending they can be rendered if they cannot.
+
+---
+
+# 3. User Flow
+
+The basic user flow should be:
+
+```text
+Landing Page
+      ↓
+Login / Register
+      ↓
+Dashboard
+      ↓
+Upload Document
+      ↓
+Document appears in library
+      ↓
+Click document
+      ↓
+Document Reader
+      ↓
+Read document
+```
+
+Keep this flow simple and reliable.
+
+---
+
+# 4. Pages
+
+Create the following routes.
+
+## `/`
+
+Landing page.
+
+Include:
+
+* Application name
+* Short description
+* Login button
+* Register button
+
+Keep it simple.
+
+---
+
+## `/login`
+
+Login page.
+
+Fields:
+
+* Email
+* Password
+
+Actions:
+
+* Login
+* Go to registration
+
+Display appropriate validation and error messages.
+
+---
+
+## `/register`
+
+Registration page.
+
+Fields:
+
+* Full name
+* Email
+* Password
+* Confirm password
+
+Actions:
+
+* Create account
+* Go to login
+
+---
+
+## `/dashboard`
+
+Main application page.
+
+Display:
+
+### Header
+
+* Application logo/name
+* Search
+* User profile
+* Logout
+
+### Main content
+
+Title:
+
+**My Documents**
+
+Button:
+
+**+ Upload Document**
+
+Display uploaded documents as cards or a clean list.
+
+Each document should show:
+
+* File icon
+* Document title
+* File type
+* File size
+* Upload date
+* Open button
+* Delete button
+
+Include an empty state:
+
+> "You don't have any documents yet."
+
+With:
+
+> "Upload your first study material to get started."
+
+---
+
+# 5. Upload Document
+
+Create a dedicated upload modal or upload page.
+
+The user should be able to:
+
+* Select a file
+* Drag and drop a file
+* See upload progress
+* Cancel an upload
+* Receive success/error feedback
+
+For Phase 1, set a reasonable file size limit and clearly display it to the user.
+
+Validate:
+
+* File type
+* File size
+* Authentication
+
+After successful upload:
+
+1. Upload the file to Supabase Storage.
+2. Save its metadata in PostgreSQL.
+3. Refresh the document list.
+4. Show a success notification.
+
+---
+
+# 6. Supabase Storage
+
+Use Supabase Storage for the actual document files.
+
+Do NOT store the binary document inside PostgreSQL.
+
+Use a storage structure similar to:
+
+```text
+documents/
+    {user_id}/
+        {document_id}/
+            filename.pdf
+```
+
+The user's files must be isolated from other users.
+
+---
+
+# 7. Database
+
+Create a `documents` table.
+
+Recommended schema:
+
+```text
+documents
+├── id UUID PRIMARY KEY
+├── user_id UUID NOT NULL
+├── title TEXT NOT NULL
+├── file_name TEXT NOT NULL
+├── file_path TEXT NOT NULL
+├── file_type TEXT NOT NULL
+├── file_size BIGINT NOT NULL
+├── created_at TIMESTAMPTZ
+└── updated_at TIMESTAMPTZ
+```
+
+The `user_id` should reference the authenticated Supabase user.
+
+Use UUIDs.
+
+Add appropriate indexes for:
+
+* user_id
+* created_at
+
+---
+
+# 8. Row Level Security
+
+Implement Supabase RLS from the beginning.
+
+A user must ONLY be able to:
+
+* View their own documents
+* Insert their own documents
+* Update their own documents
+* Delete their own documents
+
+A user must NEVER be able to access another user's document metadata.
+
+Storage policies should also ensure that users can only access files belonging to their own user ID.
+
+Use:
+
+```text
+auth.uid()
+```
+
+for ownership checks.
+
+---
+
+# 9. Document Reader
+
+Create:
+
+`/documents/:id`
+
+This should be the main reading interface.
+
+Design it as a distraction-free reading environment.
+
+Example:
+
+```text
+┌─────────────────────────────────────────────────┐
+│ ← Back     Document Name       ⛶  ⬇             │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│                                                 │
+│                 PDF DOCUMENT                    │
+│                                                 │
+│                 PAGE CONTENT                    │
+│                                                 │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│              −  100%  +     1 / 25              │
+└─────────────────────────────────────────────────┘
+```
+
+Include:
+
+* Back button
+* Document title
+* PDF viewer
+* Page navigation
+* Zoom in
+* Zoom out
+* Current page
+* Total pages
+* Download
+* Fullscreen
+
+The document should be readable without leaving the website.
+
+Use a reliable Vue-compatible PDF rendering library rather than creating a PDF renderer from scratch.
+
+---
+
+# 10. Search
+
+Implement basic document search.
+
+The user should be able to search their own documents by:
+
+* Document title
+* File name
+
+Example:
+
+```text
+Search documents...
+
+[biology]
+
+Results:
+
+📄 Biology Reviewer.pdf
+📄 Biology Lecture 1.pdf
+📄 Human Biology Notes.pdf
+```
+
+Do not implement full-text searching inside PDF contents yet.
+
+That will be added in a later phase.
+
+---
+
+# 11. Delete Document
+
+When the user chooses Delete:
+
+Show a confirmation dialog:
+
+> "Are you sure you want to delete this document?"
+
+If confirmed:
+
+1. Delete the file from Supabase Storage.
+2. Delete its database record.
+3. Refresh the document list.
+4. Show a success notification.
+
+Handle errors properly.
+
+---
+
+# 12. UI / UX
+
+The application should look like a modern study application rather than an admin dashboard.
+
+Design goals:
+
+* Clean
+* Minimal
+* Modern
+* Professional
+* Comfortable for long reading sessions
+* Responsive
+
+Use:
+
+* White/neutral background
+* Clear typography
+* Rounded cards
+* Subtle borders
+* Minimal shadows
+* Consistent spacing
+* Clear buttons
+* Lucide icons
+
+Support:
+
+* Desktop
+* Tablet
+* Mobile
+
+The document reader should receive the most attention on desktop.
+
+---
+
+# 13. Loading States
+
+Implement loading states for:
+
+* Login
+* Registration
+* Fetching documents
+* Uploading
+* Deleting
+* Opening documents
+
+Example:
+
+```text
+Uploading...
+
+████████████░░░░ 75%
+```
+
+Do not leave the UI frozen while operations are running.
+
+---
+
+# 14. Error Handling
+
+Handle:
+
+* Invalid login
+* Invalid registration
+* Unauthorized access
+* Unsupported file type
+* File too large
+* Upload failure
+* Database failure
+* Storage failure
+* Missing document
+* Expired session
+
+Show understandable error messages.
+
+Avoid exposing technical/database errors directly to users.
+
+---
+
+# 15. Project Structure
+
+Use a clean Vue architecture:
+
+```text
+src/
+│
+├── assets/
+│
+├── components/
+│   ├── layout/
+│   ├── documents/
+│   └── ui/
+│
+├── views/
+│   ├── Landing.vue
+│   ├── Login.vue
+│   ├── Register.vue
+│   ├── Dashboard.vue
+│   ├── Upload.vue
+│   └── DocumentReader.vue
+│
+├── components/
+│   ├── documents/
+│   │   ├── DocumentCard.vue
+│   │   ├── DocumentList.vue
+│   │   ├── UploadDocument.vue
+│   │   └── DocumentViewer.vue
+│
+├── stores/
+│   ├── auth.ts
+│   └── documents.ts
+│
+├── services/
+│   ├── supabase.ts
+│   └── documents.ts
+│
+├── router/
+│   └── index.ts
+│
+├── types/
+│   └── document.ts
+│
+├── App.vue
+└── main.ts
+```
+
+Keep Supabase/database logic in services rather than directly inside every Vue component.
+
+---
+
+# 16. Environment Variables
+
+Use:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+Never place secret keys directly in the source code.
+
+Never expose a Supabase service-role key in the Vue frontend.
+
+---
+
+# 17. Important Security Requirements
+
+Implement:
+
+* Supabase authentication
+* RLS
+* Storage access policies
+* Input validation
+* File type validation
+* File size validation
+* Protected routes
+
+A user should not be able to simply modify a document ID in the URL and access another user's document.
+
+For example:
+
+```text
+/documents/USER_A_DOCUMENT_ID
+```
+
+must not allow User B to access User A's document.
+
+---
+
+# 18. Future-Proof Architecture
+
+Although this is only Phase 1, structure the code so future phases can add:
+
+### Phase 2
+
+* Notes
+* Highlights
+* Bookmarks
+* Reading progress
+
+### Phase 3
+
+* AI document summarization
+* Ask AI about document
+
+### Phase 4
+
+* Flashcards
+* Quizzes
+* Study guides
+
+### Phase 5
+
+* Study analytics
+* Spaced repetition
+* Advanced search
+
+Do NOT implement these features now.
+
+Simply make sure the architecture does not prevent them from being added later.
+
+---
+
+# 19. Phase 1 Definition of Done
+
+Phase 1 is complete when a new user can:
+
+1. Open the application.
+2. Register an account.
+3. Log in.
+4. Enter the dashboard.
+5. Upload a PDF study material.
+6. See the uploaded document in their library.
+7. Close and reopen the application.
+8. Still see their document after logging back in.
+9. Click the document.
+10. Read the PDF inside the application.
+11. Navigate through the PDF.
+12. Zoom in/out.
+13. Download the document if needed.
+14. Delete the document.
+15. Confirm that the document is no longer accessible.
+16. Verify that another user cannot access their documents.
+
+The application should be functional, secure, responsive, and ready for deployment to Vercel.
+
+Do not add unnecessary features beyond this scope.
