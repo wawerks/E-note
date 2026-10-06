@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { CircleAlert, Eye, EyeOff } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 
@@ -55,48 +56,49 @@ async function handleLogin() {
 
 <template>
   <main class="auth-page">
-    <section class="auth-card">
-      <div class="brand-badge">E-NOTE</div>
-      <div class="brand-copy">
-        <h1>Welcome back</h1>
-        <p>Sign in to your document workspace.</p>
-      </div>
+
+    <section class="auth-panel">
+      <header class="brand-copy">
+        <h1>Welcome back!</h1>
+        <p>Log in to your E-Note account</p>
+      </header>
 
       <form class="auth-form" @submit.prevent="handleLogin">
         <label>
           <span>Email</span>
-          <input v-model="email" type="email" autocomplete="email" required placeholder="you@example.com">
+          <input v-model="email" type="email" autocomplete="email" required>
         </label>
 
         <label>
           <span>Password</span>
           <div class="password-field">
-            <input v-model="password" :type="passwordFieldType" autocomplete="current-password" required placeholder="Your password">
-            <button type="button" class="toggle-button" @click="showPassword = !showPassword">
-              {{ showPassword ? 'Hide' : 'Show' }}
+            <input v-model="password" :type="passwordFieldType" autocomplete="current-password" required>
+            <button
+              type="button"
+              class="toggle-button"
+              :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              @click="showPassword = !showPassword"
+            >
+              <Eye v-if="showPassword" :size="18" />
+              <EyeOff v-else :size="18" />
             </button>
           </div>
         </label>
 
-        <div class="auth-row">
-          <label class="remember-me">
-            <input type="checkbox">
-            <span>Remember me</span>
-          </label>
-          <RouterLink class="forgot-link" to="/forgot-password">Forgot password?</RouterLink>
-        </div>
+        <p class="forgot-password">Forgot your password? <RouterLink to="/forgot-password">Reset</RouterLink></p>
 
-        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="error-message">
+          <CircleAlert :size="14" />
+          <span>{{ errorMessage }}</span>
+        </p>
 
         <button class="primary-button" type="submit" :disabled="loading">
-          {{ loading ? 'Signing in...' : 'Sign In' }}
+          {{ loading ? 'Logging in...' : 'Log in' }}
         </button>
       </form>
 
-      <p class="auth-link">
-        Don't have an account?
-        <RouterLink to="/register">Register</RouterLink>
-      </p>
+      <div class="signup-divider"><span>New to E-Note?</span></div>
+      <RouterLink class="signup-button" to="/register">Sign up</RouterLink>
     </section>
   </main>
 </template>
@@ -104,106 +106,161 @@ async function handleLogin() {
 <style scoped>
 .auth-page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: #f8f9fa;
-}
-
-.auth-card {
-  width: min(100%, 460px);
-  padding: 32px;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid #e9ecef;
-  box-shadow:
-    0 4px 6px rgba(0, 0, 0, 0.02),
-    0 8px 24px rgba(0, 0, 0, 0.04);
-}
-
-.brand-badge {
-  display: inline-flex;
-  align-items: center;
+  position: relative;
+  display: flex;
   justify-content: center;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #f8f9fa;
-  color: #5e72e4;
-  font-size: 0.75rem;
+  padding: 164px 24px 48px;
+  background: #fff;
+}
+
+.brand {
+  position: absolute;
+  top: 23px;
+  left: 23px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #111;
+}
+
+.brand-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 2px solid #f15a24;
+  border-radius: 50%;
+  background: #111;
+}
+
+.brand-mark span {
+  width: 0;
+  height: 0;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid #f15a24;
+  border-left: 7px solid transparent;
+}
+
+.brand-name {
+  display: grid;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  line-height: 15px;
+}
+
+.brand-name small {
+  color: #f15a24;
+  font-size: 5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 7px;
 }
 
 .brand-copy h1 {
-  margin: 18px 0 0;
-  color: #344767;
-  font-size: 2rem;
+  margin: 0;
+  color: #171717;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .brand-copy p {
-  margin: 8px 0 0;
-  color: #67748e;
+  margin: 5px 0 0;
+  color: #929292;
+  font-size: 12px;
+  text-align: center;
+}
+
+.auth-panel {
+  width: min(100%, 344px);
 }
 
 .auth-form {
   display: grid;
-  gap: 18px;
-  margin-top: 28px;
+  gap: 16px;
+  margin-top: 37px;
 }
 
 label {
   display: grid;
-  gap: 8px;
-  font-size: 0.95rem;
-  color: #344767;
+  gap: 7px;
+  color: #171717;
+  font-size: 11px;
 }
 
 input {
   width: 100%;
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid #e9ecef;
-  background: #f8f9fa;
-  color: #344767;
+  height: 31px;
+  padding: 0 11px;
+  border: 1px solid #dedede;
+  border-radius: 9px;
+  background: #fff;
+  color: #171717;
+  font-size: 11px;
 }
 
 input:focus {
   outline: none;
-  border-color: #5e72e4;
-  box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.12);
+  border-color: #ff936d;
+  box-shadow: 0 0 0 2px rgba(255, 147, 109, 0.13);
 }
 
 .password-field {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-}
-
-.toggle-button,
-.primary-button {
-  border: 0;
-  border-radius: 16px;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  position: relative;
 }
 
 .toggle-button {
-  padding: 0 14px;
-  background: #ffffff;
-  color: #344767;
-  border: 1px solid #e9ecef;
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: 34px;
+  height: 31px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #9da2a5;
+  cursor: pointer;
+}
+
+.forgot-password {
+  margin: -2px 0 8px;
+  color: #777;
+  font-size: 11px;
+}
+
+.forgot-password a {
+  color: #f15a24;
+  text-decoration: none;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -2px 0 0;
+  color: #f04444;
+  font-size: 11px;
+}
+
+.primary-button,
+.signup-button {
+  display: grid;
+  width: 100%;
+  height: 31px;
+  place-items: center;
+  border-radius: 9px;
+  font-size: 11px;
+  text-decoration: none;
 }
 
 .primary-button {
-  padding: 14px 18px;
-  background: #5e72e4;
-  color: white;
-  font-weight: 600;
-}
-
-.toggle-button:hover,
-.primary-button:hover {
-  transform: translateY(-1px);
+  margin-top: -1px;
+  border: 0;
+  background: #ff916b;
+  color: #111;
+  cursor: pointer;
 }
 
 .primary-button:disabled {
@@ -211,51 +268,36 @@ input:focus {
   cursor: wait;
 }
 
-.error-message {
-  margin: -2px 0 0;
-  color: #ea0606;
-}
-
-.auth-row {
+.signup-divider {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
   align-items: center;
+  gap: 12px;
+  margin: 25px 0 18px;
+  color: #9c9c9c;
+  font-size: 11px;
 }
 
-.remember-me {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #67748e;
-  font-size: 0.9rem;
+.signup-divider::before,
+.signup-divider::after {
+  height: 1px;
+  flex: 1;
+  background: #ededed;
+  content: '';
 }
 
-.forgot-link {
-  color: #5e72e4;
-  font-size: 0.9rem;
-}
-
-.auth-link {
-  margin: 22px 0 0;
-  color: #67748e;
-  text-align: center;
-}
-
-.auth-link a {
-  color: #5e72e4;
-  text-decoration: none;
+.signup-button {
+  border: 1px solid #dedede;
+  color: #171717;
 }
 
 @media (max-width: 640px) {
-  .auth-card {
-    padding: 24px;
+  .auth-page {
+    padding-top: 130px;
   }
 
-  .password-field,
-  .auth-row {
-    grid-template-columns: 1fr;
-    display: grid;
+  .brand {
+    top: 20px;
+    left: 20px;
   }
 }
 </style>
