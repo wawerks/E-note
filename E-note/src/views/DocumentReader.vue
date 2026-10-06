@@ -49,7 +49,8 @@ const assistantQuestion = ref('')
 const assistantAnswer = ref('')
 const currentPage = ref(1)
 const pageCount = ref(1)
-const canvasRef = ref<HTMLCanvasElement | null>(null)
+const activeCanvas = ref<HTMLCanvasElement | null>(null)
+const annotationCanvases = ref<HTMLCanvasElement[]>([])
 const pageCanvases = ref<HTMLCanvasElement[]>([])
 const imageInput = ref<HTMLInputElement | null>(null)
 const canvasSize = ref({ width: 0, height: 0 })
@@ -63,8 +64,9 @@ const selectionBox = ref({ x: 0, y: 0, width: 0, height: 0 })
 const undoStack = ref<ImageData[]>([])
 const redoStack = ref<ImageData[]>([])
 let resizeObserver: ResizeObserver | undefined
+let drawFrame = 0
+let pendingPoint: { x: number; y: number } | null = null
 let pdfDocument: { numPages: number; getPage: (page: number) => Promise<unknown> } | null = null
-let pdfPage: { getViewport: (options: { scale: number }) => { width: number; height: number }; render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => { promise: Promise<void> } } | null = null
 
 const displayName = computed(() => getUserDisplayName(authState.user))
 const toolItems = [
@@ -99,19 +101,18 @@ function askAssistant(question = assistantQuestion.value) {
   }
 }
 
-function getCanvasPoint(event: PointerEvent) {
-  const canvas = canvasRef.value
+function getCanvasPoint(event: PointerEvent, canvas = activeCanvas.value) {
   if (!canvas) return { x: 0, y: 0 }
   const bounds = canvas.getBoundingClientRect()
   return { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
 }
 
-function getContext() {
-  return canvasRef.value?.getContext('2d') ?? null
+function getContext(canvas = activeCanvas.value) {
+  return canvas?.getContext('2d') ?? null
 }
 
 function saveCanvasState() {
-  const canvas = canvasRef.value
+  const canvas = activeCanvas.value
   const context = getContext()
   if (!canvas || !context) return
   undoStack.value.push(context.getImageData(0, 0, canvas.width, canvas.height))
@@ -125,7 +126,7 @@ function restoreCanvasState(state: ImageData | undefined) {
 }
 
 function undoAnnotation() {
-  const canvas = canvasRef.value
+  const canvas = activeCanvas.value
   const context = getContext()
   if (!canvas || !context || !undoStack.value.length) return
   redoStack.value.push(context.getImageData(0, 0, canvas.width, canvas.height))
@@ -133,7 +134,7 @@ function undoAnnotation() {
 }
 
 function redoAnnotation() {
-  const canvas = canvasRef.value
+  const canvas = activeCanvas.value
   const context = getContext()
   if (!canvas || !context || !redoStack.value.length) return
   undoStack.value.push(context.getImageData(0, 0, canvas.width, canvas.height))
@@ -141,7 +142,7 @@ function redoAnnotation() {
 }
 
 function resizeCanvas() {
-  const canvas = canvasRef.value
+  const canvas = activeCanvas.value
   if (!canvas) return
   const oldCanvas = document.createElement('canvas')
   oldCanvas.width = canvas.width
@@ -161,18 +162,22 @@ function resizeCanvas() {
   canvasSize.value = { width: bounds.width, height: bounds.height }
 }
 
+function setAnnotationCanvas(element: unknown, pageNumber: number) {
+  if (element instanceof HTMLCanvasElement) annotationCanvases.value[pageNumber - 1] = element
+}
+
 function setPageCanvas(element: unknown, pageNumber: number) {
   if (element instanceof HTMLCanvasElement) pageCanvases.value[pageNumber - 1] = element
 }
 
 async function renderPdfPage(pageNumber: number, canvas: HTMLCanvasElement) {
   if (!pdfDocument) return
-  pdfPage = await pdfDocument.getPage(pageNumber) as typeof pdfPage
+  const page = await pdfDocument.getPage(pageNumber) as { getViewport: (options: { scale: number }) => { width: number; height: number }; render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => { promise: Promise<void> } }
   const container = canvas.parentElement
-  if (!container || !pdfPage) return
-  const baseViewport = pdfPage.getViewport({ scale: 1 })
+  if (!container) return
+  const baseViewport = page.getViewport({ scale: 1 })
   const scale = Math.max((container.clientWidth - 24) / baseViewport.width, 0.5)
-  const viewport = pdfPage.getViewport({ scale })
+  const viewport = page.getViewport({ scale })
   const ratio = window.devicePixelRatio || 1
   canvas.width = Math.round(viewport.width * ratio)
   canvas.height = Math.round(viewport.height * ratio)
@@ -181,13 +186,19 @@ async function renderPdfPage(pageNumber: number, canvas: HTMLCanvasElement) {
   const context = canvas.getContext('2d')
   if (!context) return
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
-  await pdfPage.render({ canvasContext: context, viewport }).promise
+  await page.render({ canvasContext: context, viewport }).promise
 }
 
 async function renderAllPdfPages() {
   await nextTick()
-  await Promise.all(pageCanvases.value.map((canvas, index) => renderPdfPage(index + 1, canvas)))
-  resizeCanvas()
+  for (const [index, canvas] of pageCanvases.value.entries()) {
+    await renderPdfPage(index + 1, canvas)
+  }
+  setupAnnotationCanvases()
+  annotationCanvases.value.forEach((canvas) => {
+    activeCanvas.value = canvas
+    resizeCanvas()
+  })
 }
 
 async function loadPdfDocument(url: string) {
@@ -210,6 +221,8 @@ async function goToPage(page: number) {
 
 function beginAnnotation(event: PointerEvent) {
   if (!editMode.value || activeTool.value === 'select') return
+  if (!(event.currentTarget instanceof HTMLCanvasElement)) return
+  activeCanvas.value = event.currentTarget
   const point = getCanvasPoint(event)
   strokeStart.value = point
   lastPoint.value = point
@@ -225,20 +238,29 @@ function beginAnnotation(event: PointerEvent) {
     return
   }
   saveCanvasState()
-  canvasRef.value?.setPointerCapture(event.pointerId)
+  activeCanvas.value.setPointerCapture(event.pointerId)
 }
 
 function continueAnnotation(event: PointerEvent) {
+  if (!(event.currentTarget instanceof HTMLCanvasElement)) return
+  activeCanvas.value = event.currentTarget
+  pendingPoint = getCanvasPoint(event)
+  if (!drawFrame) drawFrame = requestAnimationFrame(drawPendingAnnotation)
+}
+
+function drawPendingAnnotation() {
+  drawFrame = 0
+  const point = pendingPoint
+  pendingPoint = null
+  if (!point) return
   if (!isDrawing.value) {
     if (isSelecting.value) {
-      const point = getCanvasPoint(event)
       selectionBox.value = { x: Math.min(strokeStart.value.x, point.x), y: Math.min(strokeStart.value.y, point.y), width: Math.abs(point.x - strokeStart.value.x), height: Math.abs(point.y - strokeStart.value.y) }
     }
     return
   }
   const context = getContext()
   if (!context) return
-  const point = getCanvasPoint(event)
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.lineWidth = activeTool.value === 'highlighter' ? 18 : activeTool.value === 'eraser' ? 28 : 3
@@ -252,6 +274,10 @@ function continueAnnotation(event: PointerEvent) {
 }
 
 function finishAnnotation(event: PointerEvent) {
+  if (!(event.currentTarget instanceof HTMLCanvasElement)) return
+  activeCanvas.value = event.currentTarget
+  if (drawFrame) cancelAnimationFrame(drawFrame)
+  drawPendingAnnotation()
   if (!isDrawing.value && !isSelecting.value) return
   const context = getContext()
   const point = getCanvasPoint(event)
@@ -264,6 +290,7 @@ function finishAnnotation(event: PointerEvent) {
   isDrawing.value = false
   isSelecting.value = false
   if (activeTool.value !== 'lasso') selectionBox.value = { x: 0, y: 0, width: 0, height: 0 }
+  activeCanvas.value = null
 }
 
 function commitText() {
@@ -284,13 +311,13 @@ function commitText() {
 
 function insertImage(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file || !canvasRef.value) return
+  if (!file || !activeCanvas.value) return
   const image = new window.Image()
   image.onload = () => {
     const context = getContext()
     if (!context) return
     saveCanvasState()
-    const scale = Math.min(1, (canvasRef.value!.width / (window.devicePixelRatio || 1) - 40) / image.width)
+    const scale = Math.min(1, (activeCanvas.value!.clientWidth - 40) / image.width)
     context.globalCompositeOperation = 'source-over'
     context.drawImage(image, 20, 20, image.width * scale, image.height * scale)
   }
@@ -312,7 +339,6 @@ async function loadDocument() {
   } finally {
     loading.value = false
     await nextTick()
-    setupAnnotationCanvas()
     await renderAllPdfPages()
   }
 }
@@ -326,14 +352,23 @@ onMounted(() => {
   void loadDocument()
 })
 
-function setupAnnotationCanvas() {
-  if (!canvasRef.value || resizeObserver) return
-  resizeObserver = new ResizeObserver(resizeCanvas)
-  resizeObserver.observe(canvasRef.value)
-  resizeCanvas()
+function setupAnnotationCanvases() {
+  if (!annotationCanvases.value.length || resizeObserver) return
+  resizeObserver = new ResizeObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.target instanceof HTMLCanvasElement) {
+        activeCanvas.value = entry.target
+        resizeCanvas()
+      }
+    })
+  })
+  annotationCanvases.value.forEach((canvas) => resizeObserver?.observe(canvas))
 }
 
-onBeforeUnmount(() => resizeObserver?.disconnect())
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  if (drawFrame) cancelAnimationFrame(drawFrame)
+})
 </script>
 
 <template>
@@ -384,9 +419,9 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
           <div class="document-stack">
             <div v-for="page in pageCount" :key="page" class="pdf-page">
               <canvas :ref="element => setPageCanvas(element, page)" :aria-label="`Document page ${page}`"></canvas>
+              <canvas :ref="element => setAnnotationCanvas(element, page)" class="annotation-canvas" :class="{ interactive: editMode && activeTool !== 'select' }" @pointerdown="beginAnnotation" @pointermove="continueAnnotation" @pointerup="finishAnnotation" @pointercancel="finishAnnotation"></canvas>
             </div>
           </div>
-          <canvas ref="canvasRef" class="annotation-canvas" :class="{ interactive: editMode && activeTool !== 'select' }" @pointerdown="beginAnnotation" @pointermove="continueAnnotation" @pointerup="finishAnnotation" @pointercancel="finishAnnotation"></canvas>
           <div v-if="selectionBox.width || selectionBox.height" class="selection-box" :style="{ left: `${selectionBox.x}px`, top: `${selectionBox.y}px`, width: `${selectionBox.width}px`, height: `${selectionBox.height}px` }"></div>
           <input v-if="textEditor" v-model="textValue" class="canvas-text-editor" :style="{ left: `${textEditor.x}px`, top: `${textEditor.y - 20}px` }" @keydown.enter.prevent="commitText" @blur="commitText" placeholder="Type here" />
         </div>
@@ -463,9 +498,9 @@ button { color: inherit; }
 .back-button { color: #7d5b4e; }
 .paper-stage { position: relative; width: min(100%, 920px); min-height: 500px; overflow: visible; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
 .document-stack { display: grid; gap: 18px; padding: 12px; }
-.pdf-page { display: flex; justify-content: center; width: 100%; background: #fff; }
-.pdf-page canvas { display: block; max-width: 100%; background: #fff; box-shadow: 0 2px 12px rgba(62, 56, 50, 0.08); }
-.annotation-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pdf-page { position: relative; display: flex; justify-content: center; width: 100%; background: #fff; }
+.pdf-page > canvas:first-child { position: relative; z-index: 0; display: block; max-width: 100%; background: #fff; box-shadow: 0 2px 12px rgba(62, 56, 50, 0.08); }
+.annotation-canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; background: transparent; pointer-events: none; }
 .annotation-canvas.interactive { pointer-events: auto; cursor: crosshair; }
 .selection-box { position: absolute; pointer-events: none; border: 1px dashed #c87350; background: rgba(200, 115, 80, 0.1); }
 .canvas-text-editor { position: absolute; z-index: 1; width: 180px; padding: 5px 7px; border: 1px solid #c87350; border-radius: 4px; outline: 0; background: #fffdfb; color: #34363a; font: 14px 'Space Grotesk', sans-serif; }
