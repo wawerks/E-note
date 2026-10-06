@@ -237,8 +237,8 @@ input:focus {
   place-items: center;
   border: 0;
   border-radius: 9px;
-  background: #ff916b;
-  color: #111;
+  background: #111;
+  color: #fff;
   font-size: 11px;
   cursor: pointer;
 }

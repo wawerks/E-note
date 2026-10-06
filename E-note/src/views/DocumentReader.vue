@@ -430,6 +430,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 <style scoped>
 .reader-page {
+  height: 100dvh;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -440,7 +441,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
-.topbar { z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 58px; padding: 0 18px; border-bottom: 1px solid #dedbd6; background: rgba(255, 255, 255, 0.96); }
+.topbar { position: sticky; top: 0; z-index: 10; display: flex; flex: 0 0 58px; align-items: center; justify-content: space-between; gap: 14px; min-height: 58px; padding: 0 18px; border-bottom: 1px solid #dedbd6; background: rgba(255, 255, 255, 0.98); box-shadow: 0 2px 8px rgba(45, 42, 39, 0.05); }
 .topbar-left, .topbar-actions, .document-heading, .assistant-title { display: flex; align-items: center; }
 .topbar-left, .topbar-actions { gap: 9px; }
 .document-heading { gap: 9px; margin-left: 8px; font-size: 0.9rem; font-weight: 600; }
@@ -458,9 +459,9 @@ button { color: inherit; }
 .tool-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #696b70; cursor: pointer; }
 .tool-button:hover, .tool-button.active { background: #e9e1dc; color: #bd603e; }
 .tool-divider { width: 1px; height: 24px; margin: 0 5px; }
-.canvas-area { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; align-items: center; justify-content: center; padding: 26px 54px 58px; overflow: auto; background: #e7e5e2; }
+.canvas-area { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; align-items: flex-start; justify-content: center; padding: 26px 54px 58px; overflow: auto; background: #e7e5e2; }
 .back-button { color: #7d5b4e; }
-.paper-stage { position: relative; width: min(100%, 920px); min-height: 500px; overflow: hidden; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
+.paper-stage { position: relative; width: min(100%, 920px); min-height: 500px; overflow: visible; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
 .document-stack { display: grid; gap: 18px; padding: 12px; }
 .pdf-page { display: flex; justify-content: center; width: 100%; background: #fff; }
 .pdf-page canvas { display: block; max-width: 100%; background: #fff; box-shadow: 0 2px 12px rgba(62, 56, 50, 0.08); }

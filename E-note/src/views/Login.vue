@@ -258,8 +258,8 @@ input:focus {
 .primary-button {
   margin-top: -1px;
   border: 0;
-  background: #ff916b;
-  color: #111;
+  background: #111;
+  color: #fff;
   cursor: pointer;
 }
 
