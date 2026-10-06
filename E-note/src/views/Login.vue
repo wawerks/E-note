@@ -52,6 +52,30 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+async function handleGoogleLogin() {
+  if (!supabase) {
+    errorMessage.value = 'Supabase is not configured.'
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    const redirectTo = `${window.location.origin}/login?redirect=${encodeURIComponent(getRedirectTarget())}`
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    })
+
+    if (error) errorMessage.value = error.message
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to continue with Google.'
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
@@ -97,8 +121,13 @@ async function handleLogin() {
         </button>
       </form>
 
-      <div class="signup-divider"><span>New to E-Note?</span></div>
-      <RouterLink class="signup-button" to="/register">Sign up</RouterLink>
+      <div class="signup-divider"><span>or</span></div>
+      <button class="google-button" type="button" :disabled="loading" @click="handleGoogleLogin">
+        <span class="google-mark">G</span>
+        Continue with Google
+      </button>
+
+      <RouterLink class="signup-button" to="/register" style="margin-top: 2%;">Sign up</RouterLink>
     </section>
   </main>
 </template>
@@ -266,6 +295,41 @@ input:focus {
 .primary-button:disabled {
   opacity: 0.72;
   cursor: wait;
+}
+
+.google-button {
+  display: flex;
+  width: 100%;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #dedede;
+  border-radius: 9px;
+  background: #fff;
+  color: #171717;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.google-button:hover:not(:disabled) {
+  border-color: #bdbdbd;
+  background: #fafafa;
+}
+
+.google-button:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.google-mark {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  color: #4285f4;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .signup-divider {

@@ -100,6 +100,12 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guestOnly && isAuthenticated) {
+    const redirect = to.query.redirect
+
+    if (typeof redirect === 'string' && redirect.startsWith('/')) {
+      return redirect
+    }
+
     return '/dashboard'
   }
 
