@@ -10,8 +10,7 @@ import {
 } from '../services/documents'
 import {
   BookOpen,
-  ChevronLeft,
-  ChevronRight,
+  ArrowLeft,
   CircleHelp,
   Download,
   Eraser,
@@ -51,6 +50,7 @@ const assistantAnswer = ref('')
 const currentPage = ref(1)
 const pageCount = ref(1)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const pageCanvases = ref<HTMLCanvasElement[]>([])
 const imageInput = ref<HTMLInputElement | null>(null)
 const canvasSize = ref({ width: 0, height: 0 })
 const textEditor = ref<{ x: number; y: number } | null>(null)
@@ -63,6 +63,8 @@ const selectionBox = ref({ x: 0, y: 0, width: 0, height: 0 })
 const undoStack = ref<ImageData[]>([])
 const redoStack = ref<ImageData[]>([])
 let resizeObserver: ResizeObserver | undefined
+let pdfDocument: { numPages: number; getPage: (page: number) => Promise<unknown> } | null = null
+let pdfPage: { getViewport: (options: { scale: number }) => { width: number; height: number }; render: (options: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => { promise: Promise<void> } } | null = null
 
 const displayName = computed(() => getUserDisplayName(authState.user))
 const toolItems = [
@@ -157,6 +159,53 @@ function resizeCanvas() {
     if (oldCanvas.width && oldCanvas.height) context.drawImage(oldCanvas, 0, 0, bounds.width, bounds.height)
   }
   canvasSize.value = { width: bounds.width, height: bounds.height }
+}
+
+function setPageCanvas(element: unknown, pageNumber: number) {
+  if (element instanceof HTMLCanvasElement) pageCanvases.value[pageNumber - 1] = element
+}
+
+async function renderPdfPage(pageNumber: number, canvas: HTMLCanvasElement) {
+  if (!pdfDocument) return
+  pdfPage = await pdfDocument.getPage(pageNumber) as typeof pdfPage
+  const container = canvas.parentElement
+  if (!container || !pdfPage) return
+  const baseViewport = pdfPage.getViewport({ scale: 1 })
+  const scale = Math.max((container.clientWidth - 24) / baseViewport.width, 0.5)
+  const viewport = pdfPage.getViewport({ scale })
+  const ratio = window.devicePixelRatio || 1
+  canvas.width = Math.round(viewport.width * ratio)
+  canvas.height = Math.round(viewport.height * ratio)
+  canvas.style.width = `${viewport.width}px`
+  canvas.style.height = `${viewport.height}px`
+  const context = canvas.getContext('2d')
+  if (!context) return
+  context.setTransform(ratio, 0, 0, ratio, 0, 0)
+  await pdfPage.render({ canvasContext: context, viewport }).promise
+}
+
+async function renderAllPdfPages() {
+  await nextTick()
+  await Promise.all(pageCanvases.value.map((canvas, index) => renderPdfPage(index + 1, canvas)))
+  resizeCanvas()
+}
+
+async function loadPdfDocument(url: string) {
+  try {
+    const pdfModuleUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs'
+    const pdfjs = await import(/* @vite-ignore */ pdfModuleUrl) as { getDocument: (source: { url: string }) => { promise: Promise<{ numPages: number; getPage: (page: number) => Promise<unknown> }> }; GlobalWorkerOptions: { workerSrc: string } }
+    pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs'
+    pdfDocument = await pdfjs.getDocument({ url }).promise
+    pageCount.value = pdfDocument.numPages
+  } catch {
+    errorMessage.value = 'Unable to render this document in the custom reader.'
+  }
+}
+
+async function goToPage(page: number) {
+  if (!pdfDocument || page < 1 || page > pageCount.value) return
+  currentPage.value = page
+  pageCanvases.value[page - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function beginAnnotation(event: PointerEvent) {
@@ -257,12 +306,14 @@ async function loadDocument() {
     const documentId = String(route.params.id)
     documentRecord.value = await getDocumentById(documentId)
     documentUrl.value = await getDocumentSignedUrl(documentRecord.value)
+    await loadPdfDocument(documentUrl.value)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to open document.'
   } finally {
     loading.value = false
     await nextTick()
     setupAnnotationCanvas()
+    await renderAllPdfPages()
   }
 }
 
@@ -289,6 +340,9 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   <main class="reader-page">
     <header class="topbar">
       <div class="topbar-left">
+        <RouterLink to="/dashboard" class="back-button" aria-label="Back to dashboard" title="Back to dashboard">
+          <ArrowLeft :size="18" />
+        </RouterLink>
         <button class="icon-button" type="button" aria-label="Open page thumbnails" @click="thumbnailsOpen = !thumbnailsOpen">
           <LayoutGrid :size="19" />
         </button>
@@ -296,6 +350,15 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
           <FileText :size="17" />
           <span>{{ documentRecord?.title || 'Document Reader' }}</span>
         </div>
+      </div>
+
+      <div class="tool-strip" :class="{ disabled: !editMode }" aria-label="Editing tools">
+        <button v-for="tool in toolItems" :key="tool.id" class="tool-button" :class="{ active: activeTool === tool.id }" type="button" :aria-label="tool.label" :title="tool.label" @click="activeTool = tool.id">
+          <component :is="tool.icon" :size="19" />
+        </button>
+        <span class="tool-divider"></span>
+        <button class="tool-button" :class="{ active: activeTool === 'shape' }" type="button" aria-label="Shape tool" title="Shape tool" @click="activeTool = 'shape'"><CircleHelp :size="18" /></button>
+        <button class="tool-button" :class="{ active: activeTool === 'lasso' }" type="button" aria-label="Lasso tool" title="Lasso tool" @click="activeTool = 'lasso'"><Link :size="18" /></button>
       </div>
 
       <div class="mode-switcher" aria-label="Reader mode">
@@ -314,30 +377,20 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
     </header>
 
     <div class="editor-body">
-      <aside class="tool-strip" :class="{ disabled: !editMode }" aria-label="Editing tools">
-        <button v-for="tool in toolItems" :key="tool.id" class="tool-button" :class="{ active: activeTool === tool.id }" type="button" :aria-label="tool.label" :title="tool.label" @click="activeTool = tool.id">
-          <component :is="tool.icon" :size="19" />
-        </button>
-        <span class="tool-divider"></span>
-        <button class="tool-button" :class="{ active: activeTool === 'shape' }" type="button" aria-label="Shape tool" title="Shape tool" @click="activeTool = 'shape'"><CircleHelp :size="18" /></button>
-        <button class="tool-button" :class="{ active: activeTool === 'lasso' }" type="button" aria-label="Lasso tool" title="Lasso tool" @click="activeTool = 'lasso'"><Link :size="18" /></button>
-      </aside>
-
       <section class="canvas-area">
         <div v-if="loading" class="state-panel">Loading document...</div>
         <div v-else-if="errorMessage" class="state-panel error-text">{{ errorMessage }}</div>
         <div v-else class="paper-stage">
-          <iframe :src="documentUrl" class="document-frame" title="Document preview" />
+          <div class="document-stack">
+            <div v-for="page in pageCount" :key="page" class="pdf-page">
+              <canvas :ref="element => setPageCanvas(element, page)" :aria-label="`Document page ${page}`"></canvas>
+            </div>
+          </div>
           <canvas ref="canvasRef" class="annotation-canvas" :class="{ interactive: editMode && activeTool !== 'select' }" @pointerdown="beginAnnotation" @pointermove="continueAnnotation" @pointerup="finishAnnotation" @pointercancel="finishAnnotation"></canvas>
           <div v-if="selectionBox.width || selectionBox.height" class="selection-box" :style="{ left: `${selectionBox.x}px`, top: `${selectionBox.y}px`, width: `${selectionBox.width}px`, height: `${selectionBox.height}px` }"></div>
           <input v-if="textEditor" v-model="textValue" class="canvas-text-editor" :style="{ left: `${textEditor.x}px`, top: `${textEditor.y - 20}px` }" @keydown.enter.prevent="commitText" @blur="commitText" placeholder="Type here" />
         </div>
 
-        <div class="page-controls">
-          <button class="round-button" type="button" aria-label="Previous page" :disabled="currentPage === 1" @click="currentPage--"><ChevronLeft :size="17" /></button>
-          <span>{{ currentPage }} / {{ pageCount }}</span>
-          <button class="round-button" type="button" aria-label="Next page" :disabled="currentPage === pageCount" @click="currentPage++"><ChevronRight :size="17" /></button>
-        </div>
       </section>
     </div>
 
@@ -345,7 +398,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
     <aside v-if="thumbnailsOpen" class="floating-panel thumbnails-panel">
       <div class="panel-heading"><strong>Pages</strong><button class="close-button" type="button" aria-label="Close pages" @click="thumbnailsOpen = false"><X :size="17" /></button></div>
-      <button class="page-thumbnail active" type="button" @click="currentPage = 1"><span>1</span><div class="thumbnail-paper"></div></button>
+      <button class="page-thumbnail active" type="button" @click="goToPage(1)"><span>1</span><div class="thumbnail-paper"></div></button>
       <button class="add-page-button" type="button" @click="pageCount++"><Plus :size="16" /> Add page</button>
     </aside>
 
@@ -387,12 +440,12 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
-.topbar { z-index: 3; display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 18px; border-bottom: 1px solid #dedbd6; background: rgba(255, 255, 255, 0.96); }
+.topbar { z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 58px; padding: 0 18px; border-bottom: 1px solid #dedbd6; background: rgba(255, 255, 255, 0.96); }
 .topbar-left, .topbar-actions, .document-heading, .assistant-title { display: flex; align-items: center; }
 .topbar-left, .topbar-actions { gap: 9px; }
 .document-heading { gap: 9px; margin-left: 8px; font-size: 0.9rem; font-weight: 600; }
 .document-heading svg { color: #8a756d; }
-.icon-button, .close-button, .round-button { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.icon-button, .back-button, .close-button, .round-button { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; text-decoration: none; }
 .icon-button:hover, .close-button:hover, .round-button:hover { background: #f1eeeb; }
 .icon-button:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #c96f4a; outline-offset: 2px; }
 .toolbar-divider, .tool-divider { width: 1px; height: 24px; margin: 0 4px; background: #e2dfdc; }
@@ -400,20 +453,23 @@ button { color: inherit; }
 .mode-switcher button { padding: 5px 12px; border: 0; border-radius: 6px; background: transparent; color: #787b80; font-size: 0.76rem; cursor: pointer; }
 .mode-switcher button.active { background: #fff; color: #4b4f55; box-shadow: 0 1px 3px rgba(47, 43, 40, 0.12); }
 .editor-body { display: flex; flex: 1; min-height: 0; }
-.tool-strip { z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 7px; width: 54px; padding: 13px 9px; border-right: 1px solid #dedbd6; background: #f8f7f5; }
+.tool-strip { z-index: 2; display: flex; flex: 0 1 auto; flex-direction: row; align-items: center; gap: 3px; padding: 0; background: transparent; }
 .tool-strip.disabled { opacity: 0.42; }
 .tool-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #696b70; cursor: pointer; }
 .tool-button:hover, .tool-button.active { background: #e9e1dc; color: #bd603e; }
-.tool-divider { width: 25px; height: 1px; margin: 5px 0; }
+.tool-divider { width: 1px; height: 24px; margin: 0 5px; }
 .canvas-area { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; align-items: center; justify-content: center; padding: 26px 54px 58px; overflow: auto; background: #e7e5e2; }
-.paper-stage { position: relative; width: min(100%, 920px); height: 100%; min-height: 500px; overflow: hidden; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
-.document-frame { display: block; width: 100%; height: 100%; min-height: 600px; border: 0; background: #fff; }
+.back-button { color: #7d5b4e; }
+.paper-stage { position: relative; width: min(100%, 920px); min-height: 500px; overflow: hidden; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
+.document-stack { display: grid; gap: 18px; padding: 12px; }
+.pdf-page { display: flex; justify-content: center; width: 100%; background: #fff; }
+.pdf-page canvas { display: block; max-width: 100%; background: #fff; box-shadow: 0 2px 12px rgba(62, 56, 50, 0.08); }
 .annotation-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .annotation-canvas.interactive { pointer-events: auto; cursor: crosshair; }
 .selection-box { position: absolute; pointer-events: none; border: 1px dashed #c87350; background: rgba(200, 115, 80, 0.1); }
 .canvas-text-editor { position: absolute; z-index: 1; width: 180px; padding: 5px 7px; border: 1px solid #c87350; border-radius: 4px; outline: 0; background: #fffdfb; color: #34363a; font: 14px 'Space Grotesk', sans-serif; }
 .hidden-file-input { display: none; }
-.page-controls { position: absolute; bottom: 17px; left: 50%; display: flex; align-items: center; gap: 12px; padding: 4px 7px; transform: translateX(-50%); border: 1px solid #d9d5d1; border-radius: 20px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 3px 12px rgba(45, 42, 39, 0.08); font-size: 0.75rem; color: #62656a; }
+.page-controls { display: none; }
 .round-button { width: 25px; height: 25px; border-radius: 50%; }
 .round-button:disabled { opacity: 0.3; cursor: not-allowed; }
 .floating-panel { position: fixed; z-index: 5; border: 1px solid #ddd8d3; background: rgba(255, 255, 255, 0.98); box-shadow: 0 15px 45px rgba(42, 37, 33, 0.18); }
@@ -450,10 +506,10 @@ button { color: inherit; }
   .document-heading { max-width: 150px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .mode-switcher { display: none; }
   .topbar-actions .icon-button:nth-child(1), .topbar-actions .icon-button:nth-child(2), .toolbar-divider { display: none; }
-  .tool-strip { width: 46px; padding-inline: 5px; }
+  .tool-strip { max-width: 45vw; overflow-x: auto; }
   .tool-button { width: 34px; height: 34px; }
   .canvas-area { padding: 14px 14px 53px; }
-  .paper-stage, .document-frame { min-height: 420px; }
+  .paper-stage { min-height: 420px; }
   .thumbnails-panel { left: 54px; }
 }
 </style>

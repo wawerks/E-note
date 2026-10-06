@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { BookOpenText, LayoutDashboard, LogOut, Menu, Settings, Upload, UserRound } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const sidebarOpen = ref(false)
+const isDocumentReader = computed(() => route.name === 'document-reader')
 
 const initials = computed(() => {
   const value = authStore.displayName || authStore.user?.email || 'U'
@@ -24,11 +26,12 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#f8f9fa] text-[#344767]">
+  <div class="min-h-screen bg-[#f8f9fa] text-[#344767]" :class="{ 'reader-shell': isDocumentReader }">
     <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-[#344767]/30 lg:hidden" @click="sidebarOpen = false"></div>
 
     <div class="min-h-screen lg:flex">
       <aside
+        v-if="!isDocumentReader"
         class="fixed inset-y-0 left-0 z-40 flex w-80 -translate-x-full flex-col border-r border-[#e9ecef] bg-white px-5 py-6 shadow-[0_4px_6px_rgba(0,0,0,0.02),0_8px_24px_rgba(0,0,0,0.04)] transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:w-80 lg:translate-x-0 lg:shadow-none"
         :class="sidebarOpen ? 'translate-x-0' : ''"
       >
@@ -77,7 +80,7 @@ async function handleLogout() {
       </aside>
 
       <main class="min-w-0 flex-1">
-        <header class="sticky top-0 z-20 border-b border-[#e9ecef] bg-[#f8f9fa]/90 px-5 py-4 backdrop-blur-sm lg:px-8">
+        <header v-if="!isDocumentReader" class="sticky top-0 z-20 border-b border-[#e9ecef] bg-[#f8f9fa]/90 px-5 py-4 backdrop-blur-sm lg:px-8">
           <div class="flex items-center justify-between gap-4">
             <button class="grid h-11 w-11 place-items-center rounded-2xl border border-[#e9ecef] bg-white text-[#344767] shadow-[0_4px_6px_rgba(0,0,0,0.02),0_8px_24px_rgba(0,0,0,0.04)] lg:hidden" type="button" @click="sidebarOpen = true">
               <Menu class="h-5 w-5" />
@@ -94,7 +97,7 @@ async function handleLogout() {
           </div>
         </header>
 
-        <section class="p-5 lg:p-8">
+        <section :class="isDocumentReader ? 'h-screen p-0' : 'p-5 lg:p-8'">
           <RouterView />
         </section>
       </main>
