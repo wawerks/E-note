@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authState, logout } from '../lib/auth'
 import {
@@ -20,7 +20,6 @@ import {
   Image,
   LayoutGrid,
   Link,
-  List,
   Menu,
   MessageCircle,
   MousePointer2,
@@ -51,6 +50,19 @@ const assistantQuestion = ref('')
 const assistantAnswer = ref('')
 const currentPage = ref(1)
 const pageCount = ref(1)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
+const canvasSize = ref({ width: 0, height: 0 })
+const textEditor = ref<{ x: number; y: number } | null>(null)
+const textValue = ref('')
+const isDrawing = ref(false)
+const isSelecting = ref(false)
+const strokeStart = ref({ x: 0, y: 0 })
+const lastPoint = ref({ x: 0, y: 0 })
+const selectionBox = ref({ x: 0, y: 0, width: 0, height: 0 })
+const undoStack = ref<ImageData[]>([])
+const redoStack = ref<ImageData[]>([])
+let resizeObserver: ResizeObserver | undefined
 
 const displayName = computed(() => getUserDisplayName(authState.user))
 const toolItems = [
@@ -85,6 +97,158 @@ function askAssistant(question = assistantQuestion.value) {
   }
 }
 
+function getCanvasPoint(event: PointerEvent) {
+  const canvas = canvasRef.value
+  if (!canvas) return { x: 0, y: 0 }
+  const bounds = canvas.getBoundingClientRect()
+  return { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
+}
+
+function getContext() {
+  return canvasRef.value?.getContext('2d') ?? null
+}
+
+function saveCanvasState() {
+  const canvas = canvasRef.value
+  const context = getContext()
+  if (!canvas || !context) return
+  undoStack.value.push(context.getImageData(0, 0, canvas.width, canvas.height))
+  if (undoStack.value.length > 30) undoStack.value.shift()
+  redoStack.value = []
+}
+
+function restoreCanvasState(state: ImageData | undefined) {
+  const context = getContext()
+  if (context && state) context.putImageData(state, 0, 0)
+}
+
+function undoAnnotation() {
+  const canvas = canvasRef.value
+  const context = getContext()
+  if (!canvas || !context || !undoStack.value.length) return
+  redoStack.value.push(context.getImageData(0, 0, canvas.width, canvas.height))
+  restoreCanvasState(undoStack.value.pop())
+}
+
+function redoAnnotation() {
+  const canvas = canvasRef.value
+  const context = getContext()
+  if (!canvas || !context || !redoStack.value.length) return
+  undoStack.value.push(context.getImageData(0, 0, canvas.width, canvas.height))
+  restoreCanvasState(redoStack.value.pop())
+}
+
+function resizeCanvas() {
+  const canvas = canvasRef.value
+  if (!canvas) return
+  const oldCanvas = document.createElement('canvas')
+  oldCanvas.width = canvas.width
+  oldCanvas.height = canvas.height
+  oldCanvas.getContext('2d')?.drawImage(canvas, 0, 0)
+  const bounds = canvas.getBoundingClientRect()
+  const ratio = window.devicePixelRatio || 1
+  canvas.width = Math.max(1, Math.round(bounds.width * ratio))
+  canvas.height = Math.max(1, Math.round(bounds.height * ratio))
+  canvas.style.width = `${bounds.width}px`
+  canvas.style.height = `${bounds.height}px`
+  const context = getContext()
+  if (context) {
+    context.scale(ratio, ratio)
+    if (oldCanvas.width && oldCanvas.height) context.drawImage(oldCanvas, 0, 0, bounds.width, bounds.height)
+  }
+  canvasSize.value = { width: bounds.width, height: bounds.height }
+}
+
+function beginAnnotation(event: PointerEvent) {
+  if (!editMode.value || activeTool.value === 'select') return
+  const point = getCanvasPoint(event)
+  strokeStart.value = point
+  lastPoint.value = point
+  isDrawing.value = !['text', 'image', 'shape', 'lasso'].includes(activeTool.value)
+  isSelecting.value = activeTool.value === 'lasso' || activeTool.value === 'shape'
+  if (activeTool.value === 'text') {
+    textEditor.value = point
+    nextTick(() => document.querySelector<HTMLInputElement>('.canvas-text-editor')?.focus())
+    return
+  }
+  if (activeTool.value === 'image') {
+    imageInput.value?.click()
+    return
+  }
+  saveCanvasState()
+  canvasRef.value?.setPointerCapture(event.pointerId)
+}
+
+function continueAnnotation(event: PointerEvent) {
+  if (!isDrawing.value) {
+    if (isSelecting.value) {
+      const point = getCanvasPoint(event)
+      selectionBox.value = { x: Math.min(strokeStart.value.x, point.x), y: Math.min(strokeStart.value.y, point.y), width: Math.abs(point.x - strokeStart.value.x), height: Math.abs(point.y - strokeStart.value.y) }
+    }
+    return
+  }
+  const context = getContext()
+  if (!context) return
+  const point = getCanvasPoint(event)
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  context.lineWidth = activeTool.value === 'highlighter' ? 18 : activeTool.value === 'eraser' ? 28 : 3
+  context.globalCompositeOperation = activeTool.value === 'eraser' ? 'destination-out' : 'source-over'
+  context.strokeStyle = activeTool.value === 'highlighter' ? 'rgba(246, 196, 69, 0.38)' : '#34363a'
+  context.beginPath()
+  context.moveTo(lastPoint.value.x, lastPoint.value.y)
+  context.lineTo(point.x, point.y)
+  context.stroke()
+  lastPoint.value = point
+}
+
+function finishAnnotation(event: PointerEvent) {
+  if (!isDrawing.value && !isSelecting.value) return
+  const context = getContext()
+  const point = getCanvasPoint(event)
+  if (activeTool.value === 'shape' && context) {
+    context.globalCompositeOperation = 'source-over'
+    context.strokeStyle = '#34363a'
+    context.lineWidth = 2
+    context.strokeRect(strokeStart.value.x, strokeStart.value.y, point.x - strokeStart.value.x, point.y - strokeStart.value.y)
+  }
+  isDrawing.value = false
+  isSelecting.value = false
+  if (activeTool.value !== 'lasso') selectionBox.value = { x: 0, y: 0, width: 0, height: 0 }
+}
+
+function commitText() {
+  const context = getContext()
+  if (!context || !textEditor.value || !textValue.value.trim()) {
+    textEditor.value = null
+    textValue.value = ''
+    return
+  }
+  saveCanvasState()
+  context.globalCompositeOperation = 'source-over'
+  context.fillStyle = '#34363a'
+  context.font = '16px Space Grotesk'
+  context.fillText(textValue.value, textEditor.value.x, textEditor.value.y)
+  textEditor.value = null
+  textValue.value = ''
+}
+
+function insertImage(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file || !canvasRef.value) return
+  const image = new window.Image()
+  image.onload = () => {
+    const context = getContext()
+    if (!context) return
+    saveCanvasState()
+    const scale = Math.min(1, (canvasRef.value!.width / (window.devicePixelRatio || 1) - 40) / image.width)
+    context.globalCompositeOperation = 'source-over'
+    context.drawImage(image, 20, 20, image.width * scale, image.height * scale)
+  }
+  image.src = URL.createObjectURL(file)
+  event.target instanceof HTMLInputElement && (event.target.value = '')
+}
+
 async function loadDocument() {
   loading.value = true
   errorMessage.value = ''
@@ -97,6 +261,8 @@ async function loadDocument() {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to open document.'
   } finally {
     loading.value = false
+    await nextTick()
+    setupAnnotationCanvas()
   }
 }
 
@@ -108,6 +274,15 @@ async function handleLogout() {
 onMounted(() => {
   void loadDocument()
 })
+
+function setupAnnotationCanvas() {
+  if (!canvasRef.value || resizeObserver) return
+  resizeObserver = new ResizeObserver(resizeCanvas)
+  resizeObserver.observe(canvasRef.value)
+  resizeCanvas()
+}
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <template>
@@ -129,8 +304,8 @@ onMounted(() => {
       </div>
 
       <div class="topbar-actions">
-        <button class="icon-button" type="button" aria-label="Undo"><Undo2 :size="18" /></button>
-        <button class="icon-button" type="button" aria-label="Redo"><Redo2 :size="18" /></button>
+        <button class="icon-button" type="button" aria-label="Undo" @click="undoAnnotation"><Undo2 :size="18" /></button>
+        <button class="icon-button" type="button" aria-label="Redo" @click="redoAnnotation"><Redo2 :size="18" /></button>
         <span class="toolbar-divider"></span>
         <button class="icon-button" type="button" aria-label="Open Goodnotes Assistant" @click="assistantOpen = !assistantOpen"><Sparkles :size="18" /></button>
         <a v-if="documentUrl" class="icon-button" :href="documentUrl" target="_blank" rel="noreferrer" aria-label="Download document"><Download :size="18" /></a>
@@ -144,8 +319,8 @@ onMounted(() => {
           <component :is="tool.icon" :size="19" />
         </button>
         <span class="tool-divider"></span>
-        <button class="tool-button" type="button" aria-label="Shape tool" title="Shape tool"><CircleHelp :size="18" /></button>
-        <button class="tool-button" type="button" aria-label="Lasso tool" title="Lasso tool"><Link :size="18" /></button>
+        <button class="tool-button" :class="{ active: activeTool === 'shape' }" type="button" aria-label="Shape tool" title="Shape tool" @click="activeTool = 'shape'"><CircleHelp :size="18" /></button>
+        <button class="tool-button" :class="{ active: activeTool === 'lasso' }" type="button" aria-label="Lasso tool" title="Lasso tool" @click="activeTool = 'lasso'"><Link :size="18" /></button>
       </aside>
 
       <section class="canvas-area">
@@ -153,6 +328,9 @@ onMounted(() => {
         <div v-else-if="errorMessage" class="state-panel error-text">{{ errorMessage }}</div>
         <div v-else class="paper-stage">
           <iframe :src="documentUrl" class="document-frame" title="Document preview" />
+          <canvas ref="canvasRef" class="annotation-canvas" :class="{ interactive: editMode && activeTool !== 'select' }" @pointerdown="beginAnnotation" @pointermove="continueAnnotation" @pointerup="finishAnnotation" @pointercancel="finishAnnotation"></canvas>
+          <div v-if="selectionBox.width || selectionBox.height" class="selection-box" :style="{ left: `${selectionBox.x}px`, top: `${selectionBox.y}px`, width: `${selectionBox.width}px`, height: `${selectionBox.height}px` }"></div>
+          <input v-if="textEditor" v-model="textValue" class="canvas-text-editor" :style="{ left: `${textEditor.x}px`, top: `${textEditor.y - 20}px` }" @keydown.enter.prevent="commitText" @blur="commitText" placeholder="Type here" />
         </div>
 
         <div class="page-controls">
@@ -162,6 +340,8 @@ onMounted(() => {
         </div>
       </section>
     </div>
+
+    <input ref="imageInput" class="hidden-file-input" type="file" accept="image/*" @change="insertImage" />
 
     <aside v-if="thumbnailsOpen" class="floating-panel thumbnails-panel">
       <div class="panel-heading"><strong>Pages</strong><button class="close-button" type="button" aria-label="Close pages" @click="thumbnailsOpen = false"><X :size="17" /></button></div>
@@ -226,8 +406,13 @@ button { color: inherit; }
 .tool-button:hover, .tool-button.active { background: #e9e1dc; color: #bd603e; }
 .tool-divider { width: 25px; height: 1px; margin: 5px 0; }
 .canvas-area { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; align-items: center; justify-content: center; padding: 26px 54px 58px; overflow: auto; background: #e7e5e2; }
-.paper-stage { width: min(100%, 920px); height: 100%; min-height: 500px; overflow: hidden; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
+.paper-stage { position: relative; width: min(100%, 920px); height: 100%; min-height: 500px; overflow: hidden; background: #fff; box-shadow: 0 7px 22px rgba(62, 56, 50, 0.15); }
 .document-frame { display: block; width: 100%; height: 100%; min-height: 600px; border: 0; background: #fff; }
+.annotation-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.annotation-canvas.interactive { pointer-events: auto; cursor: crosshair; }
+.selection-box { position: absolute; pointer-events: none; border: 1px dashed #c87350; background: rgba(200, 115, 80, 0.1); }
+.canvas-text-editor { position: absolute; z-index: 1; width: 180px; padding: 5px 7px; border: 1px solid #c87350; border-radius: 4px; outline: 0; background: #fffdfb; color: #34363a; font: 14px 'Space Grotesk', sans-serif; }
+.hidden-file-input { display: none; }
 .page-controls { position: absolute; bottom: 17px; left: 50%; display: flex; align-items: center; gap: 12px; padding: 4px 7px; transform: translateX(-50%); border: 1px solid #d9d5d1; border-radius: 20px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 3px 12px rgba(45, 42, 39, 0.08); font-size: 0.75rem; color: #62656a; }
 .round-button { width: 25px; height: 25px; border-radius: 50%; }
 .round-button:disabled { opacity: 0.3; cursor: not-allowed; }
